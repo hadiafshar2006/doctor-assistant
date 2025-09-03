@@ -15,7 +15,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class VectorStoreConfig {
 
     @Bean
-    @ConditionalOnBean(EmbeddingModel.class)
     @Qualifier("medicalVectorStore")
     public VectorStore medicalVectorStore(JdbcTemplate jdbcTemplate,
                                           EmbeddingModel embeddingModel,
@@ -30,7 +29,6 @@ public class VectorStoreConfig {
     }
 
     @Bean
-    @ConditionalOnBean(EmbeddingModel.class)
     @Qualifier("patientVectorStore")
     public VectorStore patientVectorStore(JdbcTemplate jdbcTemplate,
                                           EmbeddingModel embeddingModel,

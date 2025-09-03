@@ -15,7 +15,6 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@ConditionalOnBean(de.aporz.doctorassistant.service.PatientDocumentService.class)
 @RequestMapping("/api/patient-documents")
 @Tag(name = "Patient Documents")
 public class PatientDocumentController {

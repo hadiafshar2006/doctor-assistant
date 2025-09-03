@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.UUID;
 
 @Service
-@ConditionalOnBean(name = "patientVectorStore")
 public class PatientDocumentService {
 
     private final VectorStore patientVectorStore;

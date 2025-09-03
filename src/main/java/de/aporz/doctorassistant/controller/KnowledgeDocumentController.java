@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@ConditionalOnBean(de.aporz.doctorassistant.service.KnowledgeDocumentService.class)
 @RequestMapping("/api/knowledge-documents")
 @Tag(name = "Knowledge Documents")
 public class KnowledgeDocumentController {

@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 import org.apache.commons.text.StringEscapeUtils;
 
 @Service
-@ConditionalOnBean(name = {"medicalVectorStore", "patientVectorStore"})
 public class QueryService {
 
     public enum Database { PATIENT_DOCUMENTS, MEDICAL_KNOWLEDGE }
@@ -124,7 +123,7 @@ public class QueryService {
 
     private String callLlm2(QueryRequest request, Patient patient, List<Document> contextDocs) {
         String contextMedical = contextDocs.stream()
-                .map(d -> "<doc id=\"" + safe(d.getId()) + "\">" + safe(d.getContent()) + "</doc>")
+                .map(d -> "<doc id=\"" + safe(d.getId()) + "\">" + safe(d.getText()) + "</doc>")
                 .collect(Collectors.joining("\n"));
 
         String userPrompt = "<patient><id>" + patient.getId() + "</id><name>" + safe(patient.getFirstName() + " " + patient.getLastName()) + "</name><notes>" + safe(patient.getNotes()) + "</notes></patient>\n" +

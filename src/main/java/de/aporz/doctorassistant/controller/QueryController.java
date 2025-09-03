@@ -9,7 +9,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@ConditionalOnBean(de.aporz.doctorassistant.service.QueryService.class)
 @RequestMapping("/api/query")
 @Tag(name = "Query")
 public class QueryController {
