@@ -1,0 +1,12 @@
+- [x] `VectorStoreConfig für zwei Stores (medical, patient) mit Dimension 768 und Tabellennamen aus Properties anlegen`
+- [x] `Konfigurations-Properties für Vector-Tabellennamen und TopK (vector-store.*, vector.topk.*) hinzufügen`
+- [x] `JPA-Entities und Repositories für Patient, PatientDocument, KnowledgeDocument anlegen`
+- [x] `PatientService und PatientController mit CRUD und Swagger-Annotationen implementieren`
+- [x] `PatientDocumentService + -Controller: JPA + pgvector synchronisieren (create/list/update/delete), Metadata-Keys patient_id und document_date setzen`
+- [x] `KnowledgeDocumentService + -Controller: JPA + pgvector synchronisieren (create/list/update/delete)`
+- [x] `QueryService: LLM1 (Structured Output) + Vector-Suche + LLM2 implementieren inkl. Retry bei ungültigem JSON`
+- [x] `QueryController: GET-/POST-Endpoint gemäß FAQ (query, patientId, optional dateFrom/dateTo, order) implementieren`
+ - [x] `Prompt-Bausteine erstellen und XML-Escaping mit commons-text nutzen`
+ - [x] `JUnit-Tests: FilterExpression-Builder, LLM1-JSON-Parsing-Happy-Path, einfache Controller-Tests mit MockMvc`
+ - [x] `application.properties um vector-store-Tabellennamen und TopK erweitern (JPA DDL-Auto nur nach Freigabe auf update)`
+ - [ ] `Maven-Tests ausführen und eventuelle Anpassungen vornehmen`

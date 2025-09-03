@@ -1,0 +1,3 @@
+regex:(spring\.ai\.openai\.api-key\s*[:=]\s*).+ ==> $1***REMOVED***
+regex:(OPENAI_API_KEY\s*[:=]\s*).+ ==> $1***REMOVED***
+regex:(sk-[A-Za-z0-9\-]{10,}) ==> ***REMOVED***
