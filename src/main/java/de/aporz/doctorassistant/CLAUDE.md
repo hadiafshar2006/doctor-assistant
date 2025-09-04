@@ -10,7 +10,8 @@ src/main/java/de/aporz/doctorassistant/
 ├── config/
 │   ├── VectorStoreConfig.java
 │   ├── VectorStoreProperties.java
-│   └── VectorTopKProperties.java
+│   ├── VectorTopKProperties.java
+│   └── WebConfig.java
 ├── controller/
 │   ├── KnowledgeDocumentController.java
 │   ├── PatientController.java
@@ -18,15 +19,14 @@ src/main/java/de/aporz/doctorassistant/
 │   └── QueryController.java
 ├── dto/
 │   ├── CreateDocumentRequest.java
+│   ├── KnowledgeDocumentDto.java
+│   ├── PatientDocumentDto.java
 │   ├── QueryRequest.java
+│   ├── QueryResponse.java
 │   └── UpdateDocumentRequest.java
 ├── entity/
-│   ├── KnowledgeDocument.java
-│   ├── Patient.java
-│   └── PatientDocument.java
+│   └── Patient.java
 ├── repository/
-│   ├── KnowledgeDocumentRepository.java
-│   ├── PatientDocumentRepository.java
 │   └── PatientRepository.java
 ├── service/
 │   ├── KnowledgeDocumentService.java
@@ -47,6 +47,8 @@ src/main/java/de/aporz/doctorassistant/
 
 **config/VectorTopKProperties.java**: Konfiguration der TopK-Parameter für Vector-Suchen in Patient- (Standard: 5) und Knowledge-Dokumenten (Standard: 5).
 
+**config/WebConfig.java**: CORS-Konfiguration für Cross-Origin-Requests zwischen Frontend (Port 4200) und Backend (Port 8080), unterstützt auch VPN-Netzwerk (10.0.0.1).
+
 **controller/QueryController.java**: REST-Controller für medizinische Anfragen mit LLM1+Vector+LLM2 Orchestrierung über `/api/query` Endpoint.
 
 **controller/PatientController.java**: CRUD-REST-Controller für Patientenverwaltung über `/api/patients` mit Standard Create/Read/Update/Delete Operationen.
@@ -61,17 +63,15 @@ src/main/java/de/aporz/doctorassistant/
 
 **dto/UpdateDocumentRequest.java**: DTO für die Aktualisierung von Dokumenten mit Inhalt und Metadaten.
 
+**dto/QueryResponse.java**: Response DTO für medizinische Anfragen mit KI-generierter Antwort und verwendeten Dokumenten als Kontext (Patient- und Knowledge-Dokumente).
+
+**dto/PatientDocumentDto.java**: DTO für Patientendokumente mit UUID-ID, Patientenreferenz, Inhalt und Dokumentdatum.
+
+**dto/KnowledgeDocumentDto.java**: DTO für medizinische Wissensdokumente mit UUID-ID, Inhalt und Erstellungszeitpunkt.
+
 **entity/Patient.java**: JPA-Entity für Patienten mit Grunddaten (Name, Notizen) und automatischer ID-Generierung.
 
-**entity/PatientDocument.java**: JPA-Entity für Patientendokumente mit Referenz zum Patienten, Inhalt, Dokumentdatum und Vector Store ID.
-
-**entity/KnowledgeDocument.java**: JPA-Entity für medizinische Wissensdokumente mit Inhalt, Erstellungszeitpunkt und Vector Store Referenz.
-
 **repository/PatientRepository.java**: Standard JPA Repository für Patienten-Entities.
-
-**repository/PatientDocumentRepository.java**: JPA Repository mit custom Query für Patientendokumente sortiert nach Dokumentdatum.
-
-**repository/KnowledgeDocumentRepository.java**: JPA Repository mit Sortierung nach Erstellungsdatum für Wissensdokumente.
 
 **service/QueryService.java**: Kernlogik der KI-Orchestrierung - koordiniert LLM-Aufrufe, Vector-Suchen und Antwortgenerierung für medizinische Anfragen.
 
@@ -85,15 +85,19 @@ src/main/java/de/aporz/doctorassistant/
 
 ## File Relationships
 
-**Architektur Flow**: `QueryController` → `QueryService` → LLM1 (Anfrage-Analyse) → Vector Search (Patient/Knowledge) → LLM2 (Antwort-Generierung)
+**Architektur Flow**: `QueryController` → `QueryService` → LLM1 (Anfrage-Analyse) → Vector Search (Patient/Knowledge) → LLM2 (Antwort-Generierung) → `QueryResponse`
 
-**Data Persistence**: Entities (`Patient`, `PatientDocument`, `KnowledgeDocument`) ↔ Repositories ↔ Services ↔ Controllers mit paralleler Vector Store Synchronisation
+**Core Entity Management**: `Patient` Entity ↔ `PatientRepository` ↔ `PatientService` ↔ `PatientController` für grundlegende Patientenverwaltung
 
-**Configuration Chain**: `VectorStoreConfig` nutzt `VectorStoreProperties` und `VectorTopKProperties` für die PgVector-Konfiguration beider Stores
+**Vector Store Integration**: `KnowledgeDocumentService` und `PatientDocumentService` arbeiten direkt mit Vector Stores (keine JPA-Entities für Dokumente), verwenden DTOs für Datenübertragung
+
+**Configuration Chain**: `VectorStoreConfig` nutzt `VectorStoreProperties` und `VectorTopKProperties` für die PgVector-Konfiguration beider Stores, `WebConfig` für CORS-Setup
 
 **Query Processing**: `QueryService` verwendet `QueryUtils` für Filter-Erstellung und koordiniert zwischen beiden Vector Stores basierend auf LLM1-Entscheidungen
 
-**Service Dependencies**: Document Services verwalten sowohl JPA-Entities als auch Vector Store Synchronisation, Patient Service fokussiert auf reine CRUD-Operationen
+**DTO Architecture**: Separate DTOs (`PatientDocumentDto`, `KnowledgeDocumentDto`, `QueryResponse`) für API-Kommunikation, da Dokumente nur in Vector Stores gespeichert werden
+
+**Service Dependencies**: Document Services verwalten ausschließlich Vector Store Operationen ohne JPA-Persistence, Patient Service fokussiert auf traditionelle CRUD-Operationen
 
 ## Notable Insights
 
@@ -101,7 +105,7 @@ src/main/java/de/aporz/doctorassistant/
 
 **Dual Vector Store Design**: Separate Vector Stores für Patientendokumente (mit Patient-ID und Datum-Filtern) und allgemeines medizinisches Wissen ermöglichen präzise kontextuelle Suchen.
 
-**Automatische Vector Synchronisation**: Alle Document Services halten JPA-Entities und Vector Store automatisch synchron, inklusive Update/Delete Operationen.
+**Pure Vector Store Architecture**: Document Services arbeiten ausschließlich mit Vector Stores ohne JPA-Persistence - Dokumente existieren nur als Embeddings mit Metadaten, keine traditionelle Datenbank-Synchronisation nötig.
 
 **Flexible Query Planning**: QueryService kann basierend auf LLM1-Entscheidungen sowohl direkt antworten als auch komplexe Multi-Database-Suchen durchführen.
 
@@ -110,6 +114,8 @@ src/main/java/de/aporz/doctorassistant/
 **Conditional Bean Loading**: Alle Vector-abhängigen Components nutzen `@ConditionalOnBean` für graceful Degradation bei fehlenden Vector Store Konfigurationen.
 
 **Spring AI Integration**: Nutzt Spring AI Framework für nahtlose LLM- und Vector Store Integration mit PgVector Backend.
+
+**Multi-Environment CORS**: WebConfig unterstützt Development (localhost:4200/8080), Loopback (127.0.0.1) und VPN-Zugriff (10.0.0.1) für flexible Deployment-Szenarien.
 
 Verwenden Sie das devtool für Projektoperationen:
 ```bash
