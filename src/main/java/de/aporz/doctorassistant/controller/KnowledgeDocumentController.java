@@ -1,6 +1,6 @@
 package de.aporz.doctorassistant.controller;
 
-import de.aporz.doctorassistant.entity.KnowledgeDocument;
+import de.aporz.doctorassistant.dto.KnowledgeDocumentDto;
 import de.aporz.doctorassistant.service.KnowledgeDocumentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,13 +25,13 @@ public class KnowledgeDocumentController {
 
     @Operation(summary = "Create a knowledge document")
     @PostMapping
-    public ResponseEntity<KnowledgeDocument> create(@RequestParam String content) {
+    public ResponseEntity<KnowledgeDocumentDto> create(@RequestParam String content) {
         return ResponseEntity.ok(service.create(content));
     }
 
     @Operation(summary = "List knowledge documents (DESC by createdAt)")
     @GetMapping
-    public ResponseEntity<List<KnowledgeDocument>> list() {
+    public ResponseEntity<List<KnowledgeDocumentDto>> list() {
         return ResponseEntity.ok(service.list());
     }
 

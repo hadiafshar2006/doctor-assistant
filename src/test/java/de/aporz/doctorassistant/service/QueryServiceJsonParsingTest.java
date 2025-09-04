@@ -25,7 +25,7 @@ class QueryServiceJsonParsingTest {
 
     @Test
     void parsesQueriesList() throws Exception {
-        String json = "{\n  \"answer\": null,\n  \"queries\": [\n    {\n      \"query\": \"Creatin\",\n      \"database\": \"PATIENT_DOCUMENTS\",\n      \"from\": \"2024-01-01\",\n      \"to\": \"NOW\",\n      \"order\": \"DESC\"\n    },\n    {\n      \"query\": \"Creatine Fitness\",\n      \"database\": \"MEDICAL_KNOWLEDGE\"\n    }\n  ]\n}";
+        String json = "{\n  \"answer\": null,\n  \"queries\": [\n    {\n      \"query\": \"Creatin\",\n      \"database\": \"PATIENT_DOCUMENTS\",\n      \"from\": \"2024-01-01\",\n      \"to\": \"NOW\"\n    },\n    {\n      \"query\": \"Creatine Fitness\",\n      \"database\": \"MEDICAL_KNOWLEDGE\"\n    }\n  ]\n}";
 
         QueryService.Llm1Response resp = mapper.readValue(json, QueryService.Llm1Response.class);
         assertNull(resp.answer);
@@ -36,7 +36,6 @@ class QueryServiceJsonParsingTest {
         assertEquals(QueryService.Database.PATIENT_DOCUMENTS, first.database);
         assertEquals("2024-01-01", first.from);
         assertEquals("NOW", first.to);
-        assertEquals("DESC", first.order);
     }
 }
 

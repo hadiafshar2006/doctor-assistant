@@ -1,6 +1,6 @@
 package de.aporz.doctorassistant.controller;
 
-import de.aporz.doctorassistant.entity.PatientDocument;
+import de.aporz.doctorassistant.dto.PatientDocumentDto;
 import de.aporz.doctorassistant.service.PatientDocumentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,7 +27,7 @@ public class PatientDocumentController {
 
     @Operation(summary = "Create a patient document")
     @PostMapping
-    public ResponseEntity<PatientDocument> create(@RequestParam Long patientId,
+    public ResponseEntity<PatientDocumentDto> create(@RequestParam Long patientId,
                                                   @RequestParam String content,
                                                   @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate documentDate) {
         return ResponseEntity.ok(service.create(patientId, content, documentDate));
@@ -35,13 +35,13 @@ public class PatientDocumentController {
 
     @Operation(summary = "List patient documents by patient id (DESC by date)")
     @GetMapping
-    public ResponseEntity<List<PatientDocument>> list(@RequestParam Long patientId) {
+    public ResponseEntity<List<PatientDocumentDto>> list(@RequestParam Long patientId) {
         return ResponseEntity.ok(service.listByPatient(patientId));
     }
 
     @Operation(summary = "Update a patient document")
     @PutMapping("/{id}")
-    public ResponseEntity<PatientDocument> update(@PathVariable UUID id,
+    public ResponseEntity<PatientDocumentDto> update(@PathVariable UUID id,
                                                   @RequestParam String content,
                                                   @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate documentDate) {
         return ResponseEntity.ok(service.update(id, content, documentDate));

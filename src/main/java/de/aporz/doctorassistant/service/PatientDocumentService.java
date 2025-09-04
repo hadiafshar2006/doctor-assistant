@@ -1,84 +1,125 @@
 package de.aporz.doctorassistant.service;
 
+import de.aporz.doctorassistant.dto.PatientDocumentDto;
 import de.aporz.doctorassistant.entity.Patient;
-import de.aporz.doctorassistant.entity.PatientDocument;
-import de.aporz.doctorassistant.repository.PatientDocumentRepository;
 import de.aporz.doctorassistant.repository.PatientRepository;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import javax.sql.DataSource;
 import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 public class PatientDocumentService {
 
     private final VectorStore patientVectorStore;
-    private final PatientDocumentRepository docRepo;
     private final PatientRepository patientRepo;
+    private final JdbcTemplate jdbcTemplate;
 
     public PatientDocumentService(@Qualifier("patientVectorStore") VectorStore patientVectorStore,
-                                  PatientDocumentRepository docRepo,
-                                  PatientRepository patientRepo) {
+                                 PatientRepository patientRepo,
+                                 @Autowired DataSource dataSource) {
         this.patientVectorStore = patientVectorStore;
-        this.docRepo = docRepo;
         this.patientRepo = patientRepo;
+        this.jdbcTemplate = new JdbcTemplate(dataSource);
     }
 
-    public PatientDocument create(Long patientId, String content, LocalDate documentDate) {
-        Patient patient = patientRepo.findById(patientId).orElseThrow();
+    public PatientDocumentDto create(Long patientId, String content, LocalDate documentDate) {
+        // Verify patient exists
+        Patient patient = patientRepo.findById(patientId).orElseThrow(
+            () -> new RuntimeException("Patient not found: " + patientId)
+        );
 
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("patient_id", String.valueOf(patientId));
         metadata.put("document_date", documentDate.toString());
-
-        Document doc = new Document(content, metadata);
+        
+        Document doc = new Document(UUID.randomUUID().toString(), content, metadata);
         patientVectorStore.add(List.of(doc));
-
-        PatientDocument entity = new PatientDocument();
-        entity.setPatient(patient);
-        entity.setContent(content);
-        entity.setDocumentDate(documentDate);
-        entity.setVectorId(doc.getId());
-        return docRepo.save(entity);
+        
+        PatientDocumentDto dto = new PatientDocumentDto();
+        dto.setId(UUID.fromString(doc.getId()));
+        dto.setPatientId(patientId);
+        dto.setContent(content);
+        dto.setDocumentDate(documentDate);
+        return dto;
     }
 
-    public List<PatientDocument> listByPatient(Long patientId) {
-        Patient patient = patientRepo.findById(patientId).orElseThrow();
-        return docRepo.findByPatientOrderByDocumentDateDesc(patient);
+    public List<PatientDocumentDto> listByPatient(Long patientId) {
+        // Verify patient exists
+        Patient patient = patientRepo.findById(patientId).orElseThrow(
+            () -> new RuntimeException("Patient not found: " + patientId)
+        );
+
+        String sql = """
+            SELECT id, content, 
+                   (metadata->>'patient_id')::bigint as patient_id,
+                   (metadata->>'document_date')::date as document_date
+            FROM patient_documents_vectors
+            WHERE metadata->>'patient_id' = ?
+            ORDER BY (metadata->>'document_date')::date DESC
+            """;
+        
+        return jdbcTemplate.query(sql, new Object[]{patientId.toString()}, (rs, rowNum) -> {
+            PatientDocumentDto dto = new PatientDocumentDto();
+            dto.setId(UUID.fromString(rs.getString("id")));
+            dto.setPatientId(rs.getLong("patient_id"));
+            dto.setContent(rs.getString("content"));
+            dto.setDocumentDate(rs.getDate("document_date").toLocalDate());
+            return dto;
+        });
     }
 
-    public PatientDocument update(UUID id, String content, LocalDate documentDate) {
-        PatientDocument existing = docRepo.findById(id).orElseThrow();
-        // delete old vector
-        if (existing.getVectorId() != null) {
-            patientVectorStore.delete(List.of(existing.getVectorId()));
+    public PatientDocumentDto update(UUID id, String content, LocalDate documentDate) {
+        // Get existing document
+        String sql = """
+            SELECT id, content, 
+                   (metadata->>'patient_id')::bigint as patient_id,
+                   (metadata->>'document_date')::date as document_date
+            FROM patient_documents_vectors
+            WHERE id = ?::uuid
+            """;
+        
+        PatientDocumentDto existing = jdbcTemplate.queryForObject(sql, new Object[]{id.toString()}, (rs, rowNum) -> {
+            PatientDocumentDto dto = new PatientDocumentDto();
+            dto.setId(UUID.fromString(rs.getString("id")));
+            dto.setPatientId(rs.getLong("patient_id"));
+            dto.setContent(rs.getString("content"));
+            dto.setDocumentDate(rs.getDate("document_date").toLocalDate());
+            return dto;
+        });
+        
+        if (existing == null) {
+            throw new RuntimeException("Document not found: " + id);
         }
+        
+        // Delete old vector
+        patientVectorStore.delete(List.of(id.toString()));
+        
+        // Add new vector with same ID
         Map<String, Object> metadata = new HashMap<>();
-        metadata.put("patient_id", String.valueOf(existing.getPatient().getId()));
+        metadata.put("patient_id", String.valueOf(existing.getPatientId()));
         metadata.put("document_date", documentDate.toString());
-        Document newDoc = new Document(content, metadata);
+        
+        Document newDoc = new Document(id.toString(), content, metadata);
         patientVectorStore.add(List.of(newDoc));
-
-        existing.setContent(content);
-        existing.setDocumentDate(documentDate);
-        existing.setVectorId(newDoc.getId());
-        return docRepo.save(existing);
+        
+        PatientDocumentDto dto = new PatientDocumentDto();
+        dto.setId(id);
+        dto.setPatientId(existing.getPatientId());
+        dto.setContent(content);
+        dto.setDocumentDate(documentDate);
+        return dto;
     }
 
     public void delete(UUID id) {
-        PatientDocument existing = docRepo.findById(id).orElseThrow();
-        if (existing.getVectorId() != null) {
-            patientVectorStore.delete(List.of(existing.getVectorId()));
-        }
-        docRepo.delete(existing);
+        patientVectorStore.delete(List.of(id.toString()));
     }
 
     public List<Document> search(Long patientId, String query, Integer topK, LocalDate from, LocalDate to) {

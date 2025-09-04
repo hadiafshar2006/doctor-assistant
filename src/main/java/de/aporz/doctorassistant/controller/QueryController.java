@@ -1,6 +1,7 @@
 package de.aporz.doctorassistant.controller;
 
 import de.aporz.doctorassistant.dto.QueryRequest;
+import de.aporz.doctorassistant.dto.QueryResponse;
 import de.aporz.doctorassistant.service.QueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,7 +22,7 @@ public class QueryController {
 
     @Operation(summary = "Process a medical question with LLM1+Vector+LLM2 orchestration")
     @PostMapping
-    public ResponseEntity<String> ask(@RequestBody QueryRequest request) {
+    public ResponseEntity<QueryResponse> ask(@RequestBody QueryRequest request) {
         return ResponseEntity.ok(queryService.handle(request));
     }
 }

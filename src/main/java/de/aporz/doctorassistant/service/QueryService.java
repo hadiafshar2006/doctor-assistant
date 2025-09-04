@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.aporz.doctorassistant.config.VectorTopKProperties;
 import de.aporz.doctorassistant.dto.QueryRequest;
+import de.aporz.doctorassistant.dto.QueryResponse;
 import de.aporz.doctorassistant.entity.Patient;
 import de.aporz.doctorassistant.repository.PatientRepository;
 import org.springframework.ai.chat.client.ChatClient;
@@ -31,7 +32,6 @@ public class QueryService {
         public Database database;
         public String from;
         public String to;
-        public String order;
     }
 
     public static class Llm1Response {
@@ -61,28 +61,62 @@ public class QueryService {
                 .setSerializationInclusion(JsonInclude.Include.NON_NULL);
     }
 
-    public String handle(QueryRequest request) {
+    public QueryResponse handle(QueryRequest request) {
         Patient patient = patientRepository.findById(request.getPatientId()).orElseThrow();
 
         Llm1Response plan = callLlm1(request, patient);
+        
+        QueryResponse response = new QueryResponse();
+        List<QueryResponse.PatientDocumentDto> patientDocs = new ArrayList<>();
+        List<QueryResponse.KnowledgeDocumentDto> knowledgeDocs = new ArrayList<>();
+        
         if (plan.answer != null && !plan.answer.isBlank()) {
-            return plan.answer;
+            response.setAnswer(plan.answer);
+            response.setPatientDocuments(patientDocs);
+            response.setKnowledgeDocuments(knowledgeDocs);
+            return response;
         }
 
         List<Document> collected = new ArrayList<>();
         for (QuerySpec spec : Optional.ofNullable(plan.queries).orElseGet(List::of)) {
             switch (spec.database) {
-                case PATIENT_DOCUMENTS -> collected.addAll(searchPatientDocuments(request.getPatientId(), spec));
-                case MEDICAL_KNOWLEDGE -> collected.addAll(searchKnowledgeDatabase(spec));
+                case PATIENT_DOCUMENTS -> {
+                    List<Document> docs = searchPatientDocuments(request.getPatientId(), spec);
+                    collected.addAll(docs);
+                    for (Document doc : docs) {
+                        QueryResponse.PatientDocumentDto dto = new QueryResponse.PatientDocumentDto();
+                        dto.setId(doc.getId());
+                        dto.setContent(doc.getText());
+                        dto.setPatientId(request.getPatientId());
+                        if (doc.getMetadata().containsKey("document_date")) {
+                            dto.setDocumentDate(LocalDate.parse(doc.getMetadata().get("document_date").toString()));
+                        }
+                        patientDocs.add(dto);
+                    }
+                }
+                case MEDICAL_KNOWLEDGE -> {
+                    List<Document> docs = searchKnowledgeDatabase(spec);
+                    collected.addAll(docs);
+                    for (Document doc : docs) {
+                        QueryResponse.KnowledgeDocumentDto dto = new QueryResponse.KnowledgeDocumentDto();
+                        dto.setId(doc.getId());
+                        dto.setContent(doc.getText());
+                        knowledgeDocs.add(dto);
+                    }
+                }
             }
         }
 
-        return callLlm2(request, patient, collected);
+        String answer = callLlm2(request, patient, collected);
+        response.setAnswer(answer);
+        response.setPatientDocuments(patientDocs);
+        response.setKnowledgeDocuments(knowledgeDocs);
+        return response;
     }
 
     private Llm1Response callLlm1(QueryRequest request, Patient patient) {
         String sys = "You are a medical assistant. Output ONLY valid JSON without any markdown formatting, backticks, or additional text.";
-        String jsonSchema = "Required JSON format: {\"answer\": string|null, \"queries\": [{\"query\": string, \"database\": string, \"from\": string|null, \"to\": string|null, \"order\": string|null}]} where database must be either PATIENT_DOCUMENTS or MEDICAL_KNOWLEDGE. Dates as ISO-8601 or NOW.";
+        String jsonSchema = "Required JSON format: {\"answer\": string|null, \"queries\": [{\"query\": string, \"database\": string, \"from\": string|null, \"to\": string|null}]} where database must be either PATIENT_DOCUMENTS or MEDICAL_KNOWLEDGE. Dates as ISO-8601 or NOW.";
         String user = "User question: " + request.getQuery() + "\n" +
                 "Patient: name=" + safe(patient.getFirstName()) + " " + safe(patient.getLastName()) + ", notes=" + safe(patient.getNotes()) + "\n" +
                 "If you need DB queries, output them in German terms where appropriate.\n" +
