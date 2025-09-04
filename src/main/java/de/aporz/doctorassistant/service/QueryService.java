@@ -14,7 +14,6 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -73,8 +72,8 @@ public class QueryService {
         List<Document> collected = new ArrayList<>();
         for (QuerySpec spec : Optional.ofNullable(plan.queries).orElseGet(List::of)) {
             switch (spec.database) {
-                case PATIENT_DOCUMENTS -> collected.addAll(searchPatient(request.getPatientId(), spec));
-                case MEDICAL_KNOWLEDGE -> collected.addAll(searchMedical(spec));
+                case PATIENT_DOCUMENTS -> collected.addAll(searchPatientDocuments(request.getPatientId(), spec));
+                case MEDICAL_KNOWLEDGE -> collected.addAll(searchKnowledgeDatabase(spec));
             }
         }
 
@@ -82,21 +81,47 @@ public class QueryService {
     }
 
     private Llm1Response callLlm1(QueryRequest request, Patient patient) {
-        String sys = "You are a medical assistant. Decide whether to answer directly or propose vector DB queries.";
-        String jsonSchema = "Output JSON with: {answer: string|null, queries: [{query, database, from?, to?, order?}]} where database in [PATIENT_DOCUMENTS, MEDICAL_KNOWLEDGE]. Dates ISO-8601 or NOW.";
+        String sys = "You are a medical assistant. Output ONLY valid JSON without any markdown formatting, backticks, or additional text.";
+        String jsonSchema = "Required JSON format: {\"answer\": string|null, \"queries\": [{\"query\": string, \"database\": string, \"from\": string|null, \"to\": string|null, \"order\": string|null}]} where database must be either PATIENT_DOCUMENTS or MEDICAL_KNOWLEDGE. Dates as ISO-8601 or NOW.";
         String user = "User question: " + request.getQuery() + "\n" +
                 "Patient: name=" + safe(patient.getFirstName()) + " " + safe(patient.getLastName()) + ", notes=" + safe(patient.getNotes()) + "\n" +
                 "If you need DB queries, output them in German terms where appropriate.\n" +
-                jsonSchema + " Only JSON, no prose.";
+                jsonSchema + "\nIMPORTANT: Return ONLY raw JSON, no markdown, no backticks, no explanations.";
 
         CallResponseSpec resp = chatClientBuilder.build().prompt().system(sys).user(user).call();
         String content = resp.content();
+        
+        // Clean up response if it contains markdown formatting
+        content = content.trim();
+        if (content.startsWith("```json")) {
+            content = content.substring(7);
+        } else if (content.startsWith("```")) {
+            content = content.substring(3);
+        }
+        if (content.endsWith("```")) {
+            content = content.substring(0, content.length() - 3);
+        }
+        content = content.trim();
+        
         try {
             return mapper.readValue(content, Llm1Response.class);
         } catch (JsonProcessingException e) {
             // one retry with stricter instruction
             String retry = chatClientBuilder.build().prompt().system(sys)
-                    .user(user + "\nAchtung: Antworte strikt als valides JSON ohne weiteren Text.").call().content();
+                    .user(user + "\nERROR: Your previous response was not valid JSON. Return ONLY the JSON object, nothing else. No backticks, no markdown, no explanations.").call().content();
+            
+            // Clean retry response too
+            retry = retry.trim();
+            if (retry.startsWith("```json")) {
+                retry = retry.substring(7);
+            } else if (retry.startsWith("```")) {
+                retry = retry.substring(3);
+            }
+            if (retry.endsWith("```")) {
+                retry = retry.substring(0, retry.length() - 3);
+            }
+            retry = retry.trim();
+            
             try {
                 return mapper.readValue(retry, Llm1Response.class);
             } catch (JsonProcessingException ex) {
@@ -105,13 +130,13 @@ public class QueryService {
         }
     }
 
-    private List<Document> searchMedical(QuerySpec spec) {
+    private List<Document> searchKnowledgeDatabase(QuerySpec spec) {
         int topK = Math.max(1, topKProps.getKnowledge());
         SearchRequest.Builder b = SearchRequest.builder().query(spec.query).topK(topK);
         return medicalVectorStore.similaritySearch(b.build());
     }
 
-    private List<Document> searchPatient(Long patientId, QuerySpec spec) {
+    private List<Document> searchPatientDocuments(Long patientId, QuerySpec spec) {
         int topK = Math.max(1, topKProps.getPatient());
         LocalDate from = de.aporz.doctorassistant.util.QueryUtils.parseDateOrNull(spec.from);
         LocalDate to = de.aporz.doctorassistant.util.QueryUtils.parseDateOrNull(spec.to);
@@ -119,7 +144,6 @@ public class QueryService {
         SearchRequest.Builder b = SearchRequest.builder().query(spec.query).topK(topK).filterExpression(filter);
         return patientVectorStore.similaritySearch(b.build());
     }
-
 
     private String callLlm2(QueryRequest request, Patient patient, List<Document> contextDocs) {
         String contextMedical = contextDocs.stream()

@@ -24,7 +24,7 @@ public class VectorStoreConfig {
                 .schemaName("public")
                 .dimensions(props.getMedical().getDimension())
                 .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
-                .initializeSchema(false)
+                .initializeSchema(true)
                 .build();
     }
 
@@ -38,7 +38,7 @@ public class VectorStoreConfig {
                 .schemaName("public")
                 .dimensions(props.getPatient().getDimension())
                 .distanceType(PgVectorStore.PgDistanceType.COSINE_DISTANCE)
-                .initializeSchema(false)
+                .initializeSchema(true)
                 .build();
     }
 }

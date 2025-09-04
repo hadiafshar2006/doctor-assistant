@@ -35,7 +35,7 @@ public class KnowledgeDocumentService {
         medicalVectorStore.add(List.of(doc));
 
         KnowledgeDocument entity = new KnowledgeDocument();
-        entity.setContent(content);
+        entity.setContent(content); // todo: remove obsolete field in KnowledgeDocument
         entity.setCreatedAt(Instant.now());
         entity.setVectorId(doc.getId());
         return repo.save(entity);
